@@ -12,8 +12,6 @@ LINE_NOTIFY_TOKEN = "7lVpHVzPrquKZ3M4aucCt7SBuXj5tMfw8oWuQSqQTWx"
 @app.route("/home", methods=['GET', 'POST'])
 def home():
 
-
-
     order_text = ""
     stock_text = ""
     stock_textgrp = ""
@@ -170,53 +168,98 @@ def home():
             else:
                 print("ไม่มีข้อมูลให้แก้ไข")
 
-        
         elif 'button_edit' in request.form:
             button_edit = request.form.get("button_edit")
             print("แก้ไข", button_edit)
 
-            select_value = request.form.get('customer')
-            select_stock = request.form.get('stock')
+            select_value = request.form.get('customer')  # รหัสลูกค้าใหม่
+            select_stock = request.form.get('stock')  # รหัสสินค้าใหม่
 
-            print("Select value Edit:", custcode)
-            print("Select stock: Edit", select_stock)
+            if not select_value or not select_stock:
+                print("ข้อมูลไม่ครบถ้วน")
+                return redirect(url_for("home"))
 
-            custcode = select_value
+            # 🔹 ดึงข้อมูลเก่าก่อนการแก้ไข
+            query_old = f"SELECT CustCode, StockCode FROM tbSale WHERE SOCode = '{button_edit}'"
+            old_data = execute_data(query_old)
 
-            if select_value and select_stock is not None:
-                for row in stock_text:
-                    
-                    if select_stock == row[0]:
-                        result = row[1]
-                        stockgrp_code = result
-                        if custcode  is None:
-                            print("Select value is None")
-                            return redirect(url_for("home"))
-                        elif select_stock is None:
-                            print("Select stock is None")
-                            return redirect(url_for("home"))
-                        elif stockgrp_code is None:
-                            print("StockGrp is none")
-                            return redirect(url_for("home"))
-                        elif button_edit is None:
-                            print("NO point to update")
-                            return redirect(url_for("home"))
-                        else:
-                            print("Update: ", button_edit)
-                            query = f"UPDATE tbSale SET CustCode = '{custcode}', StockCode = '{select_stock}', StockGrpCode = '{stockgrp_code}' WHERE SOCode = '{button_edit}'"
-                            print("update: ",execute_data_insert(query))
-                            
-                            
+            if old_data:
+                custcode_old, stockcode_old = old_data[0]
 
-                            select_value = None
-                            select_stock = None
-                            custcode = None
-                            button_select_edit = None
+                # 🔹 ดึงข้อมูลลูกค้าเก่า
+                query_cust_old = f"SELECT CustName, CustTel, CustGrpCode FROM tbCustomer WHERE CustCode = '{custcode_old}'"
+                old_cust = execute_data(query_cust_old)
 
-                            return redirect(url_for("home"))
+                if old_cust:
+                    custname_old, phone_old, cust_grp_old = old_cust[0]
+                    query_type_old = f"SELECT CustGrpName FROM tbCustomerGrp WHERE CustGrpCode = '{cust_grp_old}'"
+                    type_old_data = execute_data(query_type_old)
+                    type_old = type_old_data[0][0] if type_old_data else "ไม่ระบุ"
+                else:
+                    custname_old, phone_old, type_old = "ไม่พบข้อมูล", "-", "-"
+
+                # 🔹 ดึงข้อมูลสินค้าเก่า
+                query_stock_old = f"SELECT StockName FROM tbStock WHERE StockCode = '{stockcode_old}'"
+                old_stock_data = execute_data(query_stock_old)
+                product_old = old_stock_data[0][0] if old_stock_data else "ไม่พบข้อมูล"
             else:
-                        print("data to update is wrong")
-                        return redirect(url_for("home"))
+                print("ไม่พบข้อมูลเดิม")
+                return redirect(url_for("home"))
+
+            # 🔹 ดึงข้อมูลใหม่
+            query_cust_new = f"SELECT CustName, CustTel, CustGrpCode FROM tbCustomer WHERE CustCode = '{select_value}'"
+            new_cust = execute_data(query_cust_new)
+
+            if new_cust:
+                custname_new, phone_new, cust_grp_new = new_cust[0]
+                query_type_new = f"SELECT CustGrpName FROM tbCustomerGrp WHERE CustGrpCode = '{cust_grp_new}'"
+                type_new_data = execute_data(query_type_new)
+                type_new = type_new_data[0][0] if type_new_data else "ไม่ระบุ"
+            else:
+                custname_new, phone_new, type_new = "ไม่พบข้อมูล", "-", "-"
+
+            # 🔹 ดึงข้อมูลสินค้าใหม่
+            query_stock_new = f"SELECT StockName FROM tbStock WHERE StockCode = '{select_stock}'"
+            new_stock_data = execute_data(query_stock_new)
+            product_new = new_stock_data[0][0] if new_stock_data else "ไม่พบข้อมูล"
+
+            # 🔹 ดึง StockGrpCode ใหม่
+            stockgrp_code = None
+            for row in stock_text:
+                if select_stock == row[0]:
+                    stockgrp_code = row[1]
+
+            if not stockgrp_code:
+                print("StockGrpCode ไม่ถูกต้อง")
+                return redirect(url_for("home"))
+
+            # 🔹 อัปเดตข้อมูลใหม่ในฐานข้อมูล
+            query_update = f"""
+                UPDATE tbSale 
+                SET CustCode = '{select_value}', StockCode = '{select_stock}', StockGrpCode = '{stockgrp_code}' 
+                WHERE SOCode = '{button_edit}'
+            """
+            execute_data_insert(query_update)
+
+            # 🔹 ส่งแจ้งเตือน LINE
+            url = "https://notify-api.line.me/api/notify"
+            headers = {
+                "Authorization": f"Bearer 7lVpHVzPrquKZ3M4aucCt7SBuXj5tMfw8oWuQSqQTWx",
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+
+            message = (
+                "CDTI_Notify: \n🏪 ร้าน: 🚲 จักรยานสะท้านโลก\n✏️การแก้ไขข้อมูลลูกค้า\n\n"
+                f"🤵 **ลูกค้าเก่า**\n📛ชื่อ:{custname_old} \n📱 เบอร์: {phone_old} \n🏷️ ประเภท: {type_old} \n🚴 สินค้า: {product_old}\n\n"
+                "🔽 การแก้ไขข้อมูลลูกค้า\n\n"
+                f"🤵 **ลูกค้าใหม่**\n📛ชื่อ:{custname_new} \n📱 เบอร์: {phone_new} \n🏷️ ประเภท: {type_new} \n🚴 สินค้า: {product_new}"
+            )
+
+            data = {"message": message}
+            requests.post(url, headers=headers, data=data)
+
+            return redirect(url_for("home"))
+
         
         elif 'button_delete' in request.form:
             button_delete = request.form.get("button_delete")
@@ -306,18 +349,18 @@ def customergrp():
 
     if result > 0:
         query = "SELECT * FROM tbCustomerGrp"
-        result_customergrp = execute_data(query)
+        result_customer = execute_data(query)
 
-        if result_customergrp:
-            customergrp_text = result_customergrp
-            print("customergrp_text")
+        if result_customer:
+            customer_text = result_customer
+            print(customer_text)
 
         else:
             print("fa")
         conn_text = "สำเร็จ"
     else:
         conn_text = "ไม่สำเร็จ"
-    return render_template("customergrp/customergrp.html",customergrp_text=customergrp_text)
+    return render_template("customergrp/customergrp.html",customer_text=customer_text)
 
 @app.route("/stock")
 def stock():

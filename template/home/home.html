@@ -162,13 +162,11 @@
                 </div>
                 <div class="col-md-4">
                         <select class="form-select">
-                                <option value="">-กลุ่มลูกค้า-</option>
-                                
-                                {% if select_value is not none %}
-                                    <option value="" selected>{{customergrp_text}}</option>
-                                {% endif %}
-                                
-                    </select>
+                            <option value="">-ประเภทลูกค้า-</option>
+                            {% if select_value is not none %}
+                                <option value="" selected>{{customergrp_text}}</option>
+                            {% endif %}
+                    </select>                                                 
                 </div>
             </div>
             <div class="mt-2">
